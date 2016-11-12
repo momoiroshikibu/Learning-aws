@@ -59,11 +59,14 @@ function s3() {
 
     s3.listObjects(function(error, response) {
         console.log(response.Contents);
-        s3.getObject({
-            Bucket: AwsConfig.BUCKET_NAME,
-            Key: response.Contents[0].Key
-        }, function(error, response) {
-            console.log(response);
+
+        response.Contents.forEach((content) => {
+            const downloadUrl = s3.getSignedUrl('getObject', {
+                Bucket: AwsConfig.BUCKET_NAME,
+                Key: content.Key,
+                Expires: 60 * 5 // 5 minutes
+            });
+            console.log(downloadUrl);
         })
     });
 }
