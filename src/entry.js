@@ -84,6 +84,6 @@ function showObjectDownloadLinks(s3, contents) {
         });
         return `<li><a href="${downloadUrl}">${content.Key}</a></li>`;
     });
-    document.getElementById('links').innerHTML = links;
+    document.getElementById('links').innerHTML = links.join('');
 }
 
