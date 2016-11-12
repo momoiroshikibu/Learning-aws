@@ -21,7 +21,10 @@ AWS.config.credentials = new CognitoIdentityCredentials({
 });
 
 
+
 document.getElementById('login_button').onclick = (event) => {
+
+    document.getElementById('links').innerHTML = 'loading...';
 
     const credentials = new Credentials(COGNITO_USER_POOL,
                                         document.getElementById('userName').value,
@@ -29,14 +32,15 @@ document.getElementById('login_button').onclick = (event) => {
 
     credentials.authenticate({
         onSuccess: (credentials, result) => {
-            const user = credentials.userPool.getCurrentUser();
-            AWS.config.credentials = new CognitoIdentityCredentials({
-                IdentityPoolId: IDENTITY_POOL_ID,
-                Logins: {
-                    'cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_lZQwFdsiy': result.getIdToken().getJwtToken()
-                },
+
+            const s3 = newS3(AwsConfig.REGION,
+                             AwsConfig.USER_POOL_ID,
+                             IDENTITY_POOL_ID,
+                             result.getIdToken().getJwtToken());
+            fetchS3Objects(s3, (response) => {
+                document.getElementById('login_wrapper').innerHTML = '';
+                showObjectDownloadLinks(s3, response.Contents);
             });
-            s3();
         },
         onFailure: (credentials, error) => {
             alert(error);
@@ -49,25 +53,37 @@ document.getElementById('login_button').onclick = (event) => {
 };
 
 
-function s3() {
-    var s3 = new S3({
+function newS3(region, userPoolId, identityPoolId, jwtToken) {
+    const params = {
+        IdentityPoolId: identityPoolId,
+        Logins: {}
+    };
+    params.Logins[`cognito-idp.${region}.amazonaws.com/${userPoolId}`] = jwtToken;
+    AWS.config.credentials = new CognitoIdentityCredentials(params);
+
+    return new S3({
         params: {
             Bucket: AwsConfig.BUCKET_NAME,
             Region: AwsConfig.REGION
         }
     });
+}
 
+function fetchS3Objects(s3, callback) {
     s3.listObjects(function(error, response) {
-        console.log(response.Contents);
-
-        response.Contents.forEach((content) => {
-            const downloadUrl = s3.getSignedUrl('getObject', {
-                Bucket: AwsConfig.BUCKET_NAME,
-                Key: content.Key,
-                Expires: 60 * 5 // 5 minutes
-            });
-            console.log(downloadUrl);
-        })
+        callback && callback(response)
     });
+}
+
+function showObjectDownloadLinks(s3, contents) {
+    const links = contents.map((content) => {
+        const downloadUrl = s3.getSignedUrl('getObject', {
+            Bucket: AwsConfig.BUCKET_NAME,
+            Key: content.Key,
+            Expires: 60 * 5 // 5 minutes
+        });
+        return `<li><a href="${downloadUrl}">${content.Key}</a></li>`;
+    });
+    document.getElementById('links').innerHTML = links;
 }
 
