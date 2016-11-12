@@ -1,4 +1,4 @@
-import {Config, CognitoIdentityCredentials} from 'aws-sdk';
+import {Config, CognitoIdentityCredentials, S3, WebIdentityCredentials} from 'aws-sdk';
 import {CognitoUserPool} from 'amazon-cognito-identity-js';
 import Credentials from './Credentials';
 import AwsConfig from './AwsConfig.js'
@@ -10,9 +10,14 @@ const COGNITO_USER_POOL = new CognitoUserPool({
 
 const IDENTITY_POOL_ID = AwsConfig.IDENTITY_POOL_ID;
 
-Config.region = AwsConfig.REGION;
-Config.credentials = new CognitoIdentityCredentials({
-    IdentityPoolId: IDENTITY_POOL_ID
+AWS.config.region = AwsConfig.REGION;
+AWS.config.credentials = new CognitoIdentityCredentials({
+    IdentityPoolId: IDENTITY_POOL_ID,
+    get: function(err, success){
+        console.log('get');
+        console.error(err);
+        console.log(success);
+    }
 });
 
 
@@ -21,10 +26,17 @@ document.getElementById('login_button').onclick = (event) => {
     const credentials = new Credentials(COGNITO_USER_POOL,
                                         document.getElementById('userName').value,
                                         document.getElementById('password').value);
+
     credentials.authenticate({
         onSuccess: (credentials, result) => {
-            console.log(this);
-            console.log(result.getAccessToken().getJwtToken());
+            const user = credentials.userPool.getCurrentUser();
+            AWS.config.credentials = new CognitoIdentityCredentials({
+                IdentityPoolId: IDENTITY_POOL_ID,
+                Logins: {
+                    'cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_lZQwFdsiy': result.getIdToken().getJwtToken()
+                },
+            });
+            s3();
         },
         onFailure: (credentials, error) => {
             alert(error);
@@ -35,3 +47,24 @@ document.getElementById('login_button').onclick = (event) => {
         }
     });
 };
+
+
+function s3() {
+    var s3 = new S3({
+        params: {
+            Bucket: AwsConfig.BUCKET_NAME,
+            Region: AwsConfig.REGION
+        }
+    });
+
+    s3.listObjects(function(error, response) {
+        console.log(response.Contents);
+        s3.getObject({
+            Bucket: AwsConfig.BUCKET_NAME,
+            Key: response.Contents[0].Key
+        }, function(error, response) {
+            console.log(response);
+        })
+    });
+}
+
